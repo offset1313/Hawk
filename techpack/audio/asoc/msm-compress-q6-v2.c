@@ -41,8 +41,8 @@
 
 #include <dsp/msm_audio_ion.h>
 #include <dsp/apr_audio-v2.h>
-#include <dsp/q6asm-v2.h>
 #include <dsp/q6core.h>
+#include <dsp/q6asm-v2.h>
 #include <dsp/msm-audio-effects-q6-v2.h>
 #include "msm-pcm-routing-v2.h"
 #include "msm-qti-pp-config.h"
@@ -1017,6 +1017,18 @@ static int msm_compr_send_media_format_block(struct snd_compr_stream *cstream,
 			break;
 		}
 
+#ifdef CONFIG_MACH_XIAOMI_C6
+		if (q6core_get_avs_version() < Q6_SUBSYS_AVS2_8) {
+			ret = q6asm_media_format_block_pcm_format_support_v3(
+					prtd->audio_client,
+					prtd->sample_rate,
+					prtd->num_channels,
+					bit_width, stream_id,
+					use_default_chmap,
+					chmap,
+					sample_word_size);
+		}
+#else
 		if (q6core_get_avcs_api_version_per_service(
 					APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
 					ADSP_ASM_API_VERSION_V2) {
@@ -1042,6 +1054,7 @@ static int msm_compr_send_media_format_block(struct snd_compr_stream *cstream,
 					ASM_LITTLE_ENDIAN,
 					DEFAULT_QF);
 		}
+#endif
 		if (ret < 0)
 			pr_err("%s: CMD Format block failed\n", __func__);
 
@@ -1357,6 +1370,14 @@ static int msm_compr_configure_dsp_for_playback
 		pr_debug("%s: stream_id %d bits_per_sample %d\n",
 				__func__, ac->stream_id, bits_per_sample);
 
+#ifdef CONFIG_MACH_XIAOMI_C6
+		if (q6core_get_avs_version() < Q6_SUBSYS_AVS2_8) {
+			ret = q6asm_stream_open_write_v3(ac,
+				prtd->codec, bits_per_sample,
+				ac->stream_id,
+				prtd->gapless_state.use_dsp_gapless_mode);
+		}
+#else
 		if (q6core_get_avcs_api_version_per_service(
 					APRV2_IDS_SERVICE_ID_ADSP_ASM_V) >=
 					ADSP_ASM_API_VERSION_V2)
@@ -1369,6 +1390,7 @@ static int msm_compr_configure_dsp_for_playback
 				prtd->codec, bits_per_sample,
 				ac->stream_id,
 				prtd->gapless_state.use_dsp_gapless_mode);
+#endif
 		if (ret < 0) {
 			pr_err("%s:ASM open write err[%d] for compr type[%d]\n",
 				__func__, ret, prtd->compr_passthr);
@@ -1484,6 +1506,12 @@ static int msm_compr_configure_dsp_for_capture(struct snd_compr_stream *cstream)
 	pr_debug("%s: stream_id %d bits_per_sample %d\n",
 			__func__, ac->stream_id, bits_per_sample);
 
+#ifdef CONFIG_MACH_XIAOMI_C6
+	if(q6core_get_avs_version() >= Q6_SUBSYS_AVS2_8) {
+		ret = q6asm_open_read_v3(prtd->audio_client, FORMAT_LINEAR_PCM,
+			bits_per_sample);
+	}
+#else
 	if (prtd->codec_param.codec.flags & COMPRESSED_TIMESTAMP_FLAG) {
 		ret = q6asm_open_read_v4(prtd->audio_client, FORMAT_LINEAR_PCM,
 			bits_per_sample, true);
@@ -1491,6 +1519,7 @@ static int msm_compr_configure_dsp_for_capture(struct snd_compr_stream *cstream)
 		ret = q6asm_open_read_v4(prtd->audio_client, FORMAT_LINEAR_PCM,
 			bits_per_sample, false);
 	}
+#endif
 	if (ret < 0) {
 		pr_err("%s: q6asm_open_read failed:%d\n", __func__, ret);
 		return ret;
@@ -1549,10 +1578,18 @@ static int msm_compr_configure_dsp_for_capture(struct snd_compr_stream *cstream)
 	pr_debug("%s: sample_rate = %d channels = %d bps = %d sample_word_size = %d\n",
 			__func__, prtd->sample_rate, prtd->num_channels,
 					 bits_per_sample, sample_word_size);
+#ifdef CONFIG_MACH_XIAOMI_C6
+	if (q6core_get_avs_version() < Q6_SUBSYS_AVS2_8) {
+	ret = q6asm_enc_cfg_blk_pcm_format_support_v3(prtd->audio_client,
+					prtd->sample_rate, prtd->num_channels,
+					bits_per_sample, sample_word_size);
+	}
+#else
 	ret = q6asm_enc_cfg_blk_pcm_format_support_v4(prtd->audio_client,
 					prtd->sample_rate, prtd->num_channels,
 					bits_per_sample, sample_word_size,
 					ASM_LITTLE_ENDIAN, DEFAULT_QF);
+#endif
 
 	return ret;
 }
@@ -2601,10 +2638,19 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 
 		pr_debug("%s: open_write stream_id %d bits_per_sample %d",
 				__func__, stream_id, bits_per_sample);
+#ifdef CONFIG_MACH_XIAOMI_C6
+	if (q6core_get_avs_version() < Q6_SUBSYS_AVS2_8) {
+		rc = q6asm_stream_open_write_v3(prtd->audio_client,
+				prtd->codec, bits_per_sample,
+				stream_id,
+				prtd->gapless_state.use_dsp_gapless_mode);
+	}
+#else
 		rc = q6asm_stream_open_write_v4(prtd->audio_client,
 				prtd->codec, bits_per_sample,
 				stream_id,
 				prtd->gapless_state.use_dsp_gapless_mode);
+#endif
 		if (rc < 0) {
 			pr_err("%s: Session out open failed for gapless\n",
 				 __func__);
